@@ -241,6 +241,29 @@ print_box :: proc(f: ^BMFF_File, box: ^BMFF_Box, level := int(0), print_siblings
 	}
 }
 
+print_box_type :: proc(f: ^BMFF_File, box: ^BMFF_Box, level := int(0), print_siblings := false, recurse := false) {
+	box := box
+
+	for box != nil {
+		print_box_header(box, level)
+		if recurse && box.first_child != nil {
+			print_box_type(f, box.first_child, level + 1, print_siblings, recurse)
+		}
+
+		if print_siblings {
+			box = box.next
+		}
+	}
+}
+
+print_box_types :: proc(f: ^BMFF_File, box: ^BMFF_Box = nil, print_siblings := false, recurse := false) {
+	if box != nil {
+		print_box_type(f, box,    0, print_siblings, recurse)
+	} else {
+		print_box_type(f, f.root, 0, true, true)
+	}
+}
+
 print :: proc(f: ^BMFF_File, box: ^BMFF_Box = nil, print_siblings := false, recurse := false) {
 	if box != nil {
 		print_box(f, box,    0, print_siblings, recurse)

@@ -38,6 +38,7 @@ package iso_bmff
 import os "core:os/os2"
 @(require) import "core:fmt"
 import "../common"
+import "core:mem"
 
 DEBUG         :: #config(BMFF_DEBUG, false)
 DEBUG_VERBOSE :: DEBUG && #config(BMFF_DEBUG_VERBOSE, false)
@@ -68,6 +69,17 @@ free_atom :: proc(atom: ^BMFF_Box, allocator := context.allocator) {
 			case ELST_V1:     delete(v.entries)
 			case FTYP:        delete(v.compatible)
 			case HDLR:        delete(v.name)
+			case URL:         delete(v.location)
+			// case URN:         // delete(v.location); delete(v.name)
+			case AVCDecoderConfigurationRecord:
+				delete(v.SequenceParameterSets)
+				delete(v.PictureParameterSets)
+				delete(v.SequenceParameterSetExt)
+			case STTS:
+				// delete(v.entries) // do I need these?
+			case STSZ:
+				// delete(v.entry_sizes) // do I need these?
+			case STSS:
 
 			// iTunes metadata types
 			case iTunes_Metadata:
@@ -87,6 +99,9 @@ free_atom :: proc(atom: ^BMFF_Box, allocator := context.allocator) {
 			case MDHD_V0, MDHD_V1:
 			case MVHD_V0, MVHD_V1:
 			case TKHD_V0, TKHD_V1:
+			case VMHD:
+			case DREF:
+			case STSD, Visual_Sample_Entry, STSC, STCO:
 			case iTunes_Track, iTunes_Disk:
 			case: fmt.panicf("free_atom: Unhandled payload type: %v\n", v)
 			}
@@ -419,7 +434,7 @@ parse :: proc(f: ^BMFF_File, parse_metadata := true) -> (err: Error) {
 
 		case .Media:
 
-		case .Media_Header:
+		case .Media_Header: // mdhd
 			version := common.peek_u8(fd) or_return
 			if version > 1 { return .MDHD_Unknown_Version }
 
@@ -440,7 +455,9 @@ parse :: proc(f: ^BMFF_File, parse_metadata := true) -> (err: Error) {
 				`hdlr` may be contained in a `mdia` or `meta` box.
 			*/
 			if !(box.parent.type == .Media || box.parent.type == .Meta) {
-				return .HDLR_Unexpected_Parent
+				skip_box(fd, box) or_return
+				break
+				// return .HDLR_Unexpected_Parent
 			}
 			if box.payload_size < size_of(_HDLR) { return .HDLR_Invalid_Size }
 
@@ -451,7 +468,84 @@ parse :: proc(f: ^BMFF_File, parse_metadata := true) -> (err: Error) {
 			hdlr.name   = cstring(raw_data(name_bytes))
 			box.payload = hdlr
 
-		case .User_Data:
+		case .Media_Information: // minf - just container
+
+		case .Video_Media_Header: // vmhd
+			vmhd := common.read_data(fd, VMHD) or_return
+			box.payload = vmhd
+
+		case .Data_Information: // dinf
+
+		case .Data_Reference: // dref
+			dref := common.read_data(fd, DREF) or_return
+			box.payload = dref
+
+		case .Data_Ref_URL:
+			_url := common.read_data(fd, _URL) or_return
+			url := URL { _url = _url }
+			location_bytes := common.read_slice(fd, box.payload_size - size_of(_URL), f.allocator) or_return
+			url.location = cstring(raw_data(location_bytes))
+			box.payload = url
+
+		// case .Data_Ref_URN: .. not implemented yet
+
+		case .Sample_Table: // stbl - just container
+
+		case .Sample_Description: // stsd
+			stsd := common.read_data(fd, STSD) or_return
+
+
+		case .avc1: //, .mp41, .mp42, .mp71:
+			visual_sample_entry := common.read_data(fd, Visual_Sample_Entry) or_return
+			box.payload = visual_sample_entry
+			fmt.println(string(visual_sample_entry.compressorname[:]), visual_sample_entry)
+
+		case .avcC:
+			avcC_bytes := common.read_slice(fd, box.payload_size, f.allocator) or_return
+			config_record: AVCDecoderConfigurationRecord
+			parse_AVCDecoderConfigurationRecord(avcC_bytes, &config_record)
+			box.payload = config_record
+			
+		case .Time_To_Sample: // stts
+			_stts := common.read_data(fd, _STTS) or_return
+			entries_bytes := common.read_slice(fd, box.payload_size - size_of(_STTS), f.allocator) or_return
+			stts: STTS= { _stts = _stts }
+			stts.entries = mem.slice_data_cast([]STTS_Entry, entries_bytes)
+			box.payload = stts
+
+		case .Sample_To_Chunk: // stsc
+			_stsc := common.read_data(fd, _STSC) or_return
+			entries_bytes := common.read_slice(fd, box.payload_size - size_of(_STSC), f.allocator) or_return
+			stsc: STSC = { _stsc = _stsc }
+			stsc.entries = mem.slice_data_cast([]STSC_Entry, entries_bytes)
+			box.payload = stsc
+			for e in stsc.entries {
+				fmt.println(">>", e)
+			}
+
+		case .Sample_Size: // stsz
+			_stsz := common.read_data(fd, _STSZ) or_return
+			samples_bytes := common.read_slice(fd, box.payload_size - size_of(_STSZ), f.allocator) or_return
+			stsz: STSZ = { _stsz = _stsz }
+			stsz.sample_sizes = mem.slice_data_cast([]u32be, samples_bytes)
+			box.payload = stsz
+
+		case .Chunk_Offset: // stco
+			_stco := common.read_data(fd, _STCO) or_return
+			entries_bytes := common.read_slice(fd, box.payload_size - size_of(_STCO), f.allocator) or_return
+			stco: STCO = { _stco = _stco }
+			stco.chunk_offsets = mem.slice_data_cast([]u32be, entries_bytes)
+			box.payload = stco
+
+		case .Sync_Sample_Table: // stss
+			_stss := common.read_data(fd, _STSS) or_return
+			entries_bytes := common.read_slice(fd, box.payload_size - size_of(_STCO), f.allocator) or_return
+			stss: STSS = { _stss = _stss }
+			stss.sample_numbers = mem.slice_data_cast([]u32be, entries_bytes)
+			box.payload = stss
+			fmt.println(stss)
+
+		case .User_Data: // udta
 			if !(box.parent.type == .Movie || box.parent.type == .Movie_Fragment || box.parent.type == .Track || box.parent.type == .Track_Fragment) {
 				return .Wrong_File_Format
 			}
@@ -469,6 +563,7 @@ parse :: proc(f: ^BMFF_File, parse_metadata := true) -> (err: Error) {
 			} else {
 				skip_box(fd, box) or_return
 			}
+
 		case .Name:
 			if parent.type == .User_Data {
 				payload := common.read_slice(fd, box.payload_size) or_return
@@ -562,6 +657,7 @@ read_box_header :: #force_inline proc(fd: ^os.File, read := true) -> (header: BM
 		file_size := os.file_size(fd) or_return
 		header.size = file_size - header.offset
 	}
+	// fmt.println(">>", header.type, header.offset, header.size, header.end)
 
 	header.end = header.offset + header.size - 1
 

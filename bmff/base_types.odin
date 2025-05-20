@@ -96,13 +96,46 @@ FourCC :: enum common.FourCC {
 		Movie_Header                            = 'm' << 24 | 'v' << 16 | 'h' << 8 | 'd', // 0x6d766864
 
 		Track                                   = 't' << 24 | 'r' << 16 | 'a' << 8 | 'k', // 0x7472616b
+			Track_Header                    = 't' << 24 | 'k' << 16 | 'h' << 8 | 'd', // 0x746b6864           tkhd
+			Track_Reference                 = 't' << 24 | 'r' << 16 | 'e' << 8 | 'f', // 0x746b6864           tref
+			// trgr - Track Grouping Indication
 			Edit                            = 'e' << 24 | 'd' << 16 | 't' << 8 | 's', // 0x65647473
 				Edit_List               = 'e' << 24 | 'l' << 16 | 's' << 8 | 't', // 0x656c7374
+			// meta - Metadata
 			Media                           = 'm' << 24 | 'd' << 16 | 'i' << 8 | 'a', // 0x6d646961
-				Handler_Reference       = 'h' << 24 | 'd' << 16 | 'l' << 8 | 'r', // 0x68646c72
-				Media_Header            = 'm' << 24 | 'd' << 16 | 'h' << 8 | 'd', // 0x6d646864
-				Media_Information       = 'm' << 24 | 'i' << 16 | 'n' << 8 | 'f', // 0x6d696e66
-			Track_Header                    = 't' << 24 | 'k' << 16 | 'h' << 8 | 'd', // 0x746b6864
+				Media_Header            = 'm' << 24 | 'd' << 16 | 'h' << 8 | 'd', // 0x6d646864                 mdhd
+				Handler_Reference       = 'h' << 24 | 'd' << 16 | 'l' << 8 | 'r', // 0x68646c72                 hdlr
+				// elng - extended language tag
+				Media_Information       = 'm' << 24 | 'i' << 16 | 'n' << 8 | 'f', // xxxxxxxxxx                 minf
+					Video_Media_Header      = 'v' << 24 | 'm' << 16 | 'h' << 8 | 'd', // xxxxxxxxxx                 vmhd
+					Sound_Media_Header      = 's' << 24 | 'm' << 16 | 'h' << 8 | 'd', // xxxxxxxxxx                 smhd
+					Hint_Media_Header       = 'h' << 24 | 'm' << 16 | 'h' << 8 | 'd', // xxxxxxxxxx                 hmhd
+					Subtitle_Media_Header   = 's' << 24 | 't' << 16 | 'h' << 8 | 'd', // xxxxxxxxxx                 sthd
+					Null_Media_Header       = 'n' << 24 | 'm' << 16 | 'h' << 8 | 'd', // xxxxxxxxxx                 nmhd
+					Data_Information        = 'd' << 24 | 'i' << 16 | 'n' << 8 | 'f', // xxxxxxxxxx                 dinf
+						Data_Ref_URL          = 'u' << 24 | 'r' << 16 | 'l' << 8 | ' ', // xxxxxxxxxx                 url
+						Data_Ref_URN          = 'u' << 24 | 'r' << 16 | 'n' << 8 | ' ', // xxxxxxxxxx                 urn
+					Data_Reference          = 'd' << 24 | 'r' << 16 | 'e' << 8 | 'f', // xxxxxxxxxx                 dref
+				Sample_Table            = 's' << 24 | 't' << 16 | 'b' << 8 | 'l', // xxxxxxxxxx                 stbl
+					Sample_Description      = 's' << 24 | 't' << 16 | 's' << 8 | 'd', // xxxxxxxxxx                 stsd
+					Time_To_Sample	= 's' << 24 | 't' << 16 | 't' << 8 | 's', //xxxxxxxx                      stts
+					// Comp_Time_To_Sample	ctts  (composition) time to sample
+					// Comp_Timeline_Mapping	cslg  composition to decode timeline mapping
+					Sample_To_Chunk	        = 's' << 24 | 't' << 16 | 's' << 8 | 'c', // xxxxxxxxxx                stsc
+					Sample_Size             = 's' << 24 | 't' << 16 | 's' << 8 | 'z', // xxxxxxxxxx                stsz  sample sizes (framing)
+					Compact_Sample_sizes	  = 's' << 24 | 't' << 16 | 'z' << 8 | '2', // xxxxxxxxxx                stz2  compact sample sizes (framing)
+					Chunk_Offset	          = 's' << 24 | 't' << 16 | 'c' << 8 | 'o', // xxxxxxxxxx                stco
+					// Chunk_Offset_64bit	co64  64-bit chunk offset
+					Sync_Sample_Table       = 's' << 24 | 't' << 16 | 's' << 8 | 's', // xxxxxxxxxx              	stss  sync sample table
+					// Shadow_Sync_Sample_Table	stsh  shadow sync sample table
+					// Sample_Padding_Bits	padb  sample padding bits
+					// Sample_Degredation_Priority	stdp  sample degradation priority
+					// Independent_Disposable_Samples	sdtp  independent and disposable samples
+					// Sample_To_Group	sbgp  sample-to-group
+					// Sample_Group_Description	sgpd  sample group description
+					// Sub_Sample_Information	subs  sub-sample information
+					// Sample_Aux_Information_Sizes	saiz  sample auxiliary information sizes
+					// Sample_Aux_Information_Offsets	saio  sample auxiliary information offsets 
 
 		User_Data                               = 'u' << 24 | 'd' << 16 | 't' << 8 | 'a', // 0x75647461
 			Meta                            = 'm' << 24 | 'e' << 16 | 't' << 8 | 'a', // 0x6d657461
@@ -187,6 +220,9 @@ FourCC :: enum common.FourCC {
 	mp41 = 'm' << 24 | 'p' << 16 | '4' << 8 | '1', // 0x6d703431
 	mp42 = 'm' << 24 | 'p' << 16 | '4' << 8 | '2', // 0x6d703432
 	mp71 = 'm' << 24 | 'p' << 16 | '7' << 8 | '1', // 0x6d703731
+	
+	// children of Sample_Boxes? not sure what all the possiblities of
+	avcC = 'a' << 24 | 'v' << 16 | 'c' << 8 | 'C', // 0x61766331
 
 	m4a_ = 'm' << 24 | '4' << 16 | 'a' << 8 | ' ', // 0x4d344120
 

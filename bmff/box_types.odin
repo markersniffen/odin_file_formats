@@ -76,6 +76,20 @@ Payload_Types :: union {
 	iTunes_Metadata,
 	iTunes_Track,
 	iTunes_Disk,
+
+	VMHD,
+	DREF,
+	URL,
+	// URN,
+
+	STSD, Visual_Sample_Entry,
+	STTS,
+	STSC,
+	STSZ,
+	STCO,
+	STSS,
+
+	AVCDecoderConfigurationRecord,
 }
 
 BMFF_Box :: struct {
@@ -297,3 +311,240 @@ Chapter_List :: struct {
 	_reserved:   u8,
 	chapters:    [dynamic]Chapter_Entry,
 }
+
+
+
+// VIDEO 
+VMHD :: struct #packed {
+	using _vf:         Version_and_Flags,
+	graphicsmode:      u16be,
+	opcolor:           [3]u16be,
+}
+
+DREF :: struct #packed {
+	using _vf:         Version_and_Flags,
+	entry_count:       u32be,
+} 
+
+_URL :: struct #packed {
+	using _vf:         Version_and_Flags,
+}
+
+URL :: struct #packed {
+	using _url: _URL,
+	location: cstring,
+}
+
+URN :: struct #packed {
+	using _vf:         Version_and_Flags,
+	location:          cstring,
+	name:              cstring,
+}
+
+Sample_Entry :: struct #packed {
+	reserved:             [6]u8,
+	data_reference_index: u16be,  
+}
+
+Visual_Sample_Entry :: struct #packed {
+	using sample_entry: Sample_Entry,
+	pre_defined:          u16be, //	unsigned int(16) pre_defined = 0;
+	reserved2:            u16be, //	const unsigned int(16) reserved = 0;
+	pre_defined2:         [3]u32be, //	unsigned int(32)[3] pre_defined = 0;
+	width:                u16be, //	unsigned int(16) width;
+	height:               u16be, //	unsigned int(16) height;
+	horizresolution:      u32be, //	template unsigned int(32) horizresolution = 0x00480000; // 72 dpi
+	vertresolution:       u32be, //	template unsigned int(32) vertresolution = 0x00480000; // 72 dpi
+	reserved3:            u32be, //	const unsigned int(32) reserved = 0;
+	frame_count:          u16be, //	template unsigned int(16) frame_count = 1;
+	compressorname:       [32]u8, //	string[32] compressorname;
+	depth:                u16be, //	template unsigned int(16) depth = 0x0018;
+	pre_defined3:         i16be, //	int(16) pre_defined = -1;
+} 
+
+STSD :: struct #packed {
+	using _vf:         Version_and_Flags,
+	entry_count:       u32be,
+}
+
+_STTS :: struct #packed {
+	using _vf:         Version_and_Flags,
+	entry_count:       u32be,
+}
+
+STTS_Entry :: struct #packed {
+	sample_count:       u32be,
+	sample_delta:       u32be,
+}
+
+STTS :: struct #packed {
+	using _stts:        _STTS,
+	entries:            []STTS_Entry
+}
+
+_STSC :: struct #packed {
+	using _vf:         Version_and_Flags,
+	entry_count:       u32be,
+}
+
+STSC_Entry :: struct #packed {
+	first_chunk:              u32be,
+	samples_per_chunk:        u32be,
+	sample_description_index: u32be,
+}
+
+STSC :: struct #packed {
+	using _stsc:        _STSC,
+	entries:            []STSC_Entry
+}
+
+_STSZ :: struct #packed {
+	using _vf:         Version_and_Flags,
+	sample_size:       u32be,
+	sample_count:      u32be,
+}
+
+STSZ :: struct #packed {
+	using _stsz:        _STSZ,
+	sample_sizes:        []u32be,
+}
+
+_STCO :: struct #packed {
+	using _vf:         Version_and_Flags,
+	entry_count:       u32be,
+}
+
+STCO :: struct #packed {
+	using _stco:        _STCO,
+	chunk_offsets:      []u32be,
+}
+
+_CO64 :: struct #packed {
+	using _vf:         Version_and_Flags,
+	entry_count:       u32be,
+}
+
+CO64 :: struct #packed {
+	using _co64:        _CO64,
+	chunk_offsets:      []u64be,
+}
+
+_STSS :: struct #packed {
+	using _vf:         Version_and_Flags,
+	entry_count:       u32be,
+}
+
+STSS :: struct #packed {
+	using _stss:        _STSS,
+	sample_numbers:     []u32be,
+}
+
+// ISO_IEC_14496-15 (AVC format)
+
+// avcC
+AVCDecoderConfigurationRecord :: struct #packed {
+    configurationVersion: u8, // 1 byte: always 1
+    AVCProfileIndication: u8, // 1 byte: profile ID, e.g., 66 (Baseline), 77 (Main), 100 (High)
+		profile_compatibility: u8, // 1 byte: profile constraints (flags bitmask)
+		AVCLevelIndication: u8, // 1 byte: level indication, e.g., 30 = Level 3.0
+
+    lengthSizeMinusOne: u8,
+
+    numOfSequenceParameterSets: u8,
+		SequenceParameterSets: []ParameterSet,
+	
+    numOfPictureParameterSets: u8,
+    PictureParameterSets: []ParameterSet,
+
+		chroma_format:                u8,
+		bit_depth_luma_minus8:        u8,
+		bit_depth_chroma_minus8:      u8,
+		numOfSequenceParameterSetExt: u8,
+		SequenceParameterSetExt:      []ParameterSet,
+}
+
+ParameterSet :: struct {
+	length: u16be,
+	data:   []u8,
+}
+
+parse_AVCDecoderConfigurationRecord :: proc(data:[]u8, record:^AVCDecoderConfigurationRecord) {
+	record.configurationVersion = data[0]
+	record.AVCProfileIndication = data[1]
+	record.profile_compatibility = data[2]
+	record.AVCLevelIndication  = data[3]
+	record.lengthSizeMinusOne = (data[4] & 0b00000011) // TODO: maybe add + 1 and change the name?
+
+	record.numOfSequenceParameterSets = data[5] & 0b00011111
+	record.SequenceParameterSets = make([]ParameterSet, record.numOfSequenceParameterSets)
+	pos := 6
+	for i in 0..<record.numOfSequenceParameterSets {
+		sps := &record.SequenceParameterSets[i]
+		sps.length = ((^u16be)(&data[pos]))^
+		pos += size_of(u16be)
+		sps.data = make([]u8, sps.length)
+		for &val in sps.data {
+			val = data[pos]
+			pos += 1
+		}
+	}
+
+	record.numOfPictureParameterSets = data[pos]; pos += 1
+	record.PictureParameterSets = make([]ParameterSet, record.numOfPictureParameterSets)
+	for i in 0..<record.numOfPictureParameterSets {
+		pps := &record.PictureParameterSets[i]
+		pps.length = ((^u16be)(&data[pos]))^
+		pos += size_of(u16be)
+		pps.data = make([]u8, pps.length)
+		for &val in pps.data {
+			val = data[pos]
+			pos += 1
+		}
+	}
+
+	// Optional block for advanced profiles (e.g. High profile = 100)
+  if record.AVCProfileIndication == 100 || record.AVCProfileIndication == 110 ||
+	   record.AVCProfileIndication == 122 || record.AVCProfileIndication == 144 {
+
+		record.chroma_format = (data[pos] & 0b00000011); pos += 1
+		record.bit_depth_luma_minus8 = (data[pos] & 0b00000111); pos += 1
+		record.bit_depth_chroma_minus8 = (data[pos] & 0b00000111); pos += 1
+		record.numOfSequenceParameterSetExt = data[pos]; pos += 1
+
+		record.SequenceParameterSetExt = make([]ParameterSet, record.numOfSequenceParameterSetExt)
+		for i in 0..<record.numOfSequenceParameterSetExt {
+			sppe := &record.SequenceParameterSetExt[i]
+			sppe.length = ((^u16be)(&data[pos]))^
+			pos += size_of(u16be)
+			sppe.data = make([]u8, sppe.length)
+			for &val in sppe.data {
+				val = data[pos]
+				pos += 1
+			}
+		}
+	}
+}
+
+
+
+// // btrt
+// MPEG4BitRateBox :: struct #packed {
+//  unsigned int(32) bufferSizeDB;
+//  unsigned int(32) maxBitrate;
+//  unsigned int(32) avgBitrate;
+// }
+
+// class MPEG4ExtensionDescriptorsBox extends Box(‘m4ds’) {
+//  Descriptor Descr[0 .. 255];
+// }
+// class AVCSampleEntry() extends VisualSampleEntry (‘avc1’){
+//  AVCConfigurationBox config;
+//  MPEG4BitRateBox (); // optional
+//  MPEG4ExtensionDescriptorsBox (); // optional
+// }
+// class AVC2SampleEntry() extends VisualSampleEntry (‘avc2’){
+//  AVCConfigurationBox avcconfig;
+//  MPEG4BitRateBox bitrate; // optional
+//  MPEG4ExtensionDescriptorsBox descr; // optional
+//  extra_boxes boxes; // optional
+// } 
